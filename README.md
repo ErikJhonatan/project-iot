@@ -58,3 +58,5 @@ Asegúrate de cargar Firmata Standard en el Arduino con el IDE antes de iniciar 
 ## Cambios de comportamiento
 
 Solo `public/` se sirve como contenido estático. Importar `server.js` no abre HTTP ni inicializa hardware; `startServer()` y `stopServer()` gestionan su ciclo de vida. La calibración exige valores finitos y `SENSOR_MAX > SENSOR_MIN`. Los comandos deben ser texto no vacío de hasta 1000 caracteres.
+
+El cierre concurrente comparte una única operación de limpieza. Reiniciar mientras el servidor se cierra devuelve un error.

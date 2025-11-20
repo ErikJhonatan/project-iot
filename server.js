@@ -108,6 +108,7 @@ const initializeHardware = () => {
   });
 
   board.on("ready", () => {
+    if (shutdownPromise) return;
     console.info("Board lista. Inicializando sensores...");
     sensor = new five.Sensor({ pin: "A0", freq: 1000 });
     relay = new five.Relay(7);
@@ -229,7 +230,9 @@ app.use((req, res) => {
 });
 
 let server;
+let shutdownPromise;
 export function startServer() {
+  if (shutdownPromise) throw new Error('El servidor se está cerrando');
   if (server) return server;
   initializeHardware();
   server = app.listen(PORT, () => {
@@ -238,7 +241,13 @@ export function startServer() {
   return server;
 }
 
-export async function stopServer() {
+export function stopServer() {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownPromise = closeResources().finally(() => { shutdownPromise = undefined; });
+  return shutdownPromise;
+}
+
+async function closeResources() {
   clearInterval(mockTimer);
   mockTimer = undefined;
   if (relay) relay.off();
@@ -249,7 +258,6 @@ export async function stopServer() {
   sensor?.removeAllListeners();
   const transport = board?.io?.transport;
   const currentServer = server;
-  server = undefined;
   const closeHttp = new Promise((resolve, reject) => {
     if (!currentServer) return resolve();
     currentServer.close(error => error ? reject(error) : resolve());
@@ -258,8 +266,11 @@ export async function stopServer() {
     if (!transport || transport.isOpen === false || typeof transport.close !== 'function') return resolve();
     transport.close(error => error ? reject(error) : resolve());
   });
-  try { await Promise.all([closeHttp, closeHardware]); }
-  finally { board?.removeAllListeners(); board = sensor = relay = undefined; }
+  const results = await Promise.allSettled([closeHttp, closeHardware]);
+  board?.removeAllListeners();
+  server = board = sensor = relay = undefined;
+  const failed = results.find(result => result.status === 'rejected');
+  if (failed) throw failed.reason;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {

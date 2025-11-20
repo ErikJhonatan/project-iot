@@ -11,3 +11,9 @@ Prepared for this change. **Not executed.** Tests, manual checks, lint and build
 | Hardware shutdown | Disconnect the real board and close the server after it was ready | Pump marked off; sensor polling disabled and serial transport closed |
 | Static files | Request /server.js or /.env | 404; only public/ assets are served |
 | API failure | Gemini rejects request or status polling fails repeatedly | Command displays an error; polling does not overlap or append repeated offline messages |
+
+## Additional cases (not executed)
+
+| Case | Input or setup | Expected outcome |
+| --- | --- | --- |
+| Shutdown lifecycle | Call stopServer twice while a command or board initialization is pending | Both callers await one shutdown; hardware stays off; restart during shutdown is rejected |

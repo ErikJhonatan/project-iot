@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="emerald">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Greenvic - Smart Irrigation Dashboard</title>
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css"
+    />
+    <style>
+      body {
+        font-family: "Manrope", system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #d3f2d5 0%, #f4fff5 55%);
+        min-height: 100vh;
+      }
+    </style>
+  </head>
+  <body class="text-slate-900">
+    <div class="min-h-screen flex flex-col px-4 sm:px-8 lg:px-16 py-6 gap-6">
+      <header class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-14 h-14 rounded-2xl bg-green-600 grid place-items-center shadow-lg shadow-green-500/30"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-7 w-7 text-white"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 2C12 2 6 9 6 13C6 16.3137 8.68629 19 12 19C15.3137 19 18 16.3137 18 13C18 9 12 2 12 2Z" />
+              <path d="M12 19V22" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-sm uppercase tracking-[0.3em] text-green-800">
+              Greenvic IoT
+            </p>
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">
+              Smart Irrigation System
+            </h1>
+          </div>
+        </div>
+        <div class="badge badge-success badge-lg py-3 px-4 text-lg">
+          Control Center
+        </div>
+      </header>
+
+      <main
+        class="grid grid-cols-1 lg:grid-cols-[2fr,1fr] gap-6 items-start flex-1"
+      >
+        <section
+          class="space-y-6 bg-white/70 backdrop-blur rounded-3xl p-6 shadow-xl shadow-green-100"
+        >
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-semibold text-slate-800">
+              Estado del Terreno
+            </h2>
+            <div id="alert-offline" class="hidden alert alert-error w-fit">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-6 w-6 flex-shrink-0 stroke-current"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span>Sistema Offline</span>
+            </div>
+          </div>
+
+          <div class="card bg-gradient-to-br from-green-500 to-emerald-600">
+            <div class="card-body text-white">
+              <h3 class="card-title text-white">Humedad del Suelo</h3>
+              <p class="text-sm text-white/90">
+                Actualizado cada 2 segundos desde el sensor capacitivo.
+              </p>
+              <div class="flex flex-col lg:flex-row gap-6 items-center py-4">
+                <div
+                  class="radial-progress text-white text-3xl"
+                  style="--value:50; --size:7.5rem; --thickness:10px"
+                  role="progressbar"
+                  id="humidity-gauge"
+                >
+                  <span id="humidity-label">50%</span>
+                </div>
+                <div class="flex-1 space-y-3 w-full">
+                  <div class="flex justify-between text-sm">
+                    <span>Humedad</span>
+                    <span id="humidity-text">50%</span>
+                  </div>
+                  <progress
+                    id="humidity-progress"
+                    class="progress progress-primary w-full"
+                    value="50"
+                    max="100"
+                  ></progress>
+                  <p class="text-sm text-white/90">
+                    Nivel objetivo recomendado: 45% - 65%
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl p-4 flex items-center gap-4">
+            <div class="flex-1">
+              <p class="text-sm text-slate-500">Estado de la bomba</p>
+              <h4 class="text-xl font-semibold" id="pump-status-text">
+                INACTIVA
+              </h4>
+            </div>
+            <div id="pump-badge" class="badge text-lg px-5 py-4 badge-neutral">
+              INACTIVA
+            </div>
+          </div>
+        </section>
+
+        <section class="space-y-6">
+          <div class="bg-white/80 rounded-3xl p-6 shadow-lg h-fit">
+            <h2 class="text-xl font-semibold text-slate-800 mb-4">
+              Control por Voz
+            </h2>
+            <p class="text-sm text-slate-500 mb-6">
+              Mantén presionado el botón y dicta tu comando. El sistema
+              interpretará tu intención y actuará.
+            </p>
+            <div class="flex flex-col items-center gap-4">
+              <button
+                id="mic-button"
+                class="btn btn-lg btn-outline btn-success w-full sm:w-3/4 h-28 text-xl gap-3"
+              >
+                <span class="loading loading-ring loading-lg hidden" id="mic-loading"></span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-8 w-8"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 1v11m6.5-6a6.5 6.5 0 11-13 0"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M4 10v2a8 8 0 0016 0v-2M12 19v4"
+                  />
+                </svg>
+                <span id="mic-label">Mantén presionado para hablar</span>
+              </button>
+              <small class="text-slate-500">
+                Requiere navegador con Web Speech API (Chrome recomendado).
+              </small>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-3xl p-6 shadow-lg h-[360px] flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xl font-semibold text-slate-800">Log de Chat</h2>
+              <button id="clear-log" class="btn btn-sm btn-ghost">Limpiar</button>
+            </div>
+            <div
+              id="chat-log"
+              class="flex-1 overflow-y-auto space-y-4 pr-2"
+            ></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const statusUrl = "http://localhost:3000/status";
+      const commandUrl = "http://localhost:3000/command";
+      const pollInterval = 2000;
+
+      const humidityGauge = document.getElementById("humidity-gauge");
+      const humidityLabel = document.getElementById("humidity-label");
+      const humidityText = document.getElementById("humidity-text");
+      const humidityProgress = document.getElementById("humidity-progress");
+      const pumpBadge = document.getElementById("pump-badge");
+      const pumpStatusText = document.getElementById("pump-status-text");
+      const alertOffline = document.getElementById("alert-offline");
+      const chatLog = document.getElementById("chat-log");
+      const clearLogBtn = document.getElementById("clear-log");
+      const micButton = document.getElementById("mic-button");
+      const micLabel = document.getElementById("mic-label");
+      const micLoading = document.getElementById("mic-loading");
+
+      const appendMessage = (type, text) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = `chat ${
+          type === "user" ? "chat-end" : "chat-start"
+        }`;
+        wrapper.innerHTML = `
+          <div class="chat-bubble ${
+            type === "user"
+              ? "chat-bubble-success"
+              : "chat-bubble-secondary"
+          } whitespace-pre-line">${text}</div>`;
+        chatLog.appendChild(wrapper);
+        chatLog.scrollTop = chatLog.scrollHeight;
+      };
+
+      clearLogBtn.addEventListener("click", () => {
+        chatLog.innerHTML = "";
+      });
+
+      const updateUI = ({ humidity, pumpOn, boardReady }) => {
+        if (typeof humidity === "number") {
+          const safeValue = Math.min(Math.max(humidity, 0), 100);
+          humidityGauge.style.setProperty("--value", safeValue);
+          humidityLabel.textContent = `${safeValue}%`;
+          humidityText.textContent = `${safeValue}%`;
+          humidityProgress.value = safeValue;
+        }
+
+        if (pumpOn) {
+          pumpBadge.className = "badge text-lg px-5 py-4 badge-error animate-pulse";
+          pumpBadge.textContent = "ACTIVA";
+          pumpStatusText.textContent = "Bomba ACTIVA";
+        } else {
+          pumpBadge.className = "badge text-lg px-5 py-4 badge-neutral";
+          pumpBadge.textContent = "INACTIVA";
+          pumpStatusText.textContent = "Bomba INACTIVA";
+        }
+
+        alertOffline.classList.toggle("hidden", boardReady);
+      };
+
+      const handleErrorState = (message) => {
+        alertOffline.classList.remove("hidden");
+        appendMessage("system", message);
+      };
+
+      const pollStatus = async () => {
+        try {
+          const res = await fetch(statusUrl);
+          if (!res.ok) throw new Error("Status HTTP " + res.status);
+          const data = await res.json();
+          updateUI(data);
+        } catch (error) {
+          console.error("Error al obtener /status", error);
+          handleErrorState("Sistema Offline: " + error.message);
+        }
+      };
+
+      setInterval(pollStatus, pollInterval);
+      pollStatus();
+
+      const recognition = "webkitSpeechRecognition" in window
+        ? new webkitSpeechRecognition()
+        : null;
+
+      if (recognition) {
+        recognition.lang = "es-ES";
+        recognition.interimResults = false;
+        recognition.continuous = false;
+
+        recognition.onstart = () => {
+          micButton.classList.add("btn-active");
+          micLabel.textContent = "Escuchando...";
+          micLoading.classList.remove("hidden");
+        };
+
+        recognition.onend = () => {
+          micButton.classList.remove("btn-active");
+          micLabel.textContent = "Mantén presionado para hablar";
+          micLoading.classList.add("hidden");
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Speech error", event.error);
+          appendMessage(
+            "system",
+            "No pude leer tu comando. Inténtalo nuevamente."
+          );
+        };
+
+        recognition.onresult = async (event) => {
+          const transcript = event.results[0][0].transcript;
+          appendMessage("user", transcript);
+          await sendCommand(transcript);
+        };
+
+        let pressTimeout;
+        micButton.addEventListener("mousedown", () => {
+          recognition.start();
+          pressTimeout = setTimeout(() => {}, 0);
+        });
+        micButton.addEventListener("mouseup", () => {
+          clearTimeout(pressTimeout);
+          recognition.stop();
+        });
+        micButton.addEventListener("mouseleave", () => {
+          if (recognition) recognition.stop();
+        });
+        micButton.addEventListener("touchstart", (e) => {
+          e.preventDefault();
+          recognition.start();
+        });
+        micButton.addEventListener("touchend", () => {
+          recognition.stop();
+        });
+      } else {
+        micButton.disabled = true;
+        micButton.classList.add("btn-disabled");
+        micLabel.textContent = "Micrófono no soportado";
+      }
+
+      const sendCommand = async (text) => {
+        try {
+          const res = await fetch(commandUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command: text }),
+          });
+
+          if (!res.ok) {
+            throw new Error("Error HTTP " + res.status);
+          }
+
+          const data = await res.json();
+          appendMessage("assistant", data.response_text || "Sin respuesta");
+          updateUI(data);
+        } catch (error) {
+          console.error("Error enviando comando", error);
+          appendMessage(
+            "system",
+            "No pude comunicarme con el servidor: " + error.message
+          );
+          handleErrorState("Sistema Offline: " + error.message);
+        }
+      };
+    </script>
+  </body>
+</html>

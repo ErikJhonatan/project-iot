@@ -13,8 +13,12 @@ const MOCK_HARDWARE =
   String(process.env.MOCK_HARDWARE || "false").toLowerCase() === "true";
 
 // Calibración del sensor (ajustar según hardware real)
-const SENSOR_MIN = Number(process.env.SENSOR_MIN) || 0;
-const SENSOR_MAX = Number(process.env.SENSOR_MAX) || 1023;
+const SENSOR_MIN = Number(process.env.SENSOR_MIN ?? 0);
+const SENSOR_MAX = Number(process.env.SENSOR_MAX ?? 1023);
+
+if (!Number.isFinite(SENSOR_MIN) || !Number.isFinite(SENSOR_MAX) || SENSOR_MAX <= SENSOR_MIN) {
+  throw new Error("Calibración inválida: SENSOR_MAX debe superar SENSOR_MIN");
+}
 
 if (!GEMINI_API_KEY) {
   throw new Error("Falta la variable de entorno GEMINI_API_KEY");
@@ -26,7 +30,7 @@ app.use(express.json());
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const STATIC_DIR = __dirname;
+const STATIC_DIR = path.join(__dirname, "public");
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const irrigationController = genAI.getGenerativeModel({
@@ -41,6 +45,7 @@ const irrigationController = genAI.getGenerativeModel({
   ].join(" "),
 });
 
+let mockTimer;
 let board;
 let sensor;
 let relay;
@@ -81,7 +86,7 @@ const updatePumpState = (shouldTurnOn) => {
 
 const startMockHardwareLoop = () => {
   boardReady = true;
-  setInterval(() => {
+  mockTimer = setInterval(() => {
     const delta = (Math.random() - 0.5) * 5;
     mockHumidityTrend = clamp(mockHumidityTrend + delta, 10, 90);
     currentHumidity = Number(mockHumidityTrend.toFixed(1));
@@ -108,6 +113,7 @@ const initializeHardware = () => {
     relay = new five.Relay(7);
 
     sensor.on("data", function onSensorData() {
+      if (!Number.isFinite(this.value)) { currentHumidity = null; return; }
       currentHumidity = mapRawToPercent(this.value);
     });
 
@@ -115,11 +121,13 @@ const initializeHardware = () => {
   });
 
   board.on("error", (err) => {
+    boardReady = false;
+    currentHumidity = null;
+    updatePumpState(false);
     console.error("Error en Johnny-Five:", err.message);
   });
 };
 
-initializeHardware();
 
 const interpretCommand = async (text) => {
   const prompt = text?.trim();
@@ -141,14 +149,14 @@ const interpretCommand = async (text) => {
   try {
     const parsed = JSON.parse(rawText);
     if (
-      typeof parsed.intent !== "string" ||
-      typeof parsed.response_text !== "string"
+      !["activar_riego", "desactivar_riego", "detener_riego", "consultar_humedad", "otro"].includes(parsed?.intent) ||
+      typeof parsed.response_text !== "string" || parsed.response_text.length > 300
     ) {
       throw new Error("Respuesta incompleta");
     }
     return parsed;
   } catch (error) {
-    console.warn("No se pudo parsear la respuesta de Gemini:", rawText);
+    console.warn("Respuesta de Gemini inválida");
     return { intent: "otro", response_text: "No comprendí la orden" };
   }
 };
@@ -177,7 +185,7 @@ app.get("/status", (req, res) => {
 app.post("/command", async (req, res) => {
   try {
     const { command } = req.body || {};
-    if (!command) {
+    if (typeof command !== "string" || !command.trim() || command.length > 1000) {
       return res.status(400).json({ error: 'Falta el campo "command".' });
     }
 
@@ -211,7 +219,7 @@ app.post("/command", async (req, res) => {
       boardReady,
     });
   } catch (error) {
-    const status = /hardware|lista|lectura/.test(error.message) ? 503 : 500;
+    const status = /hardware|lista|listo|lectura/.test(error.message) ? 503 : 500;
     res.status(status).json({ error: error.message, pumpOn, boardReady });
   }
 });
@@ -220,17 +228,45 @@ app.use((req, res) => {
   res.status(404).json({ error: "Ruta no encontrada" });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Servidor Greenvic corriendo en http://localhost:${PORT}`);
-});
+let server;
+export function startServer() {
+  if (server) return server;
+  initializeHardware();
+  server = app.listen(PORT, () => {
+    console.log(`Servidor Greenvic corriendo en http://localhost:${PORT}`);
+  });
+  return server;
+}
 
-const gracefulShutdown = () => {
-  console.log("Cerrando servidor...");
-  updatePumpState(false);
-  server.close(() => process.exit(0));
-};
+export async function stopServer() {
+  clearInterval(mockTimer);
+  mockTimer = undefined;
+  if (relay) relay.off();
+  pumpOn = false;
+  boardReady = false;
+  currentHumidity = null;
+  sensor?.disable();
+  sensor?.removeAllListeners();
+  const transport = board?.io?.transport;
+  const currentServer = server;
+  server = undefined;
+  const closeHttp = new Promise((resolve, reject) => {
+    if (!currentServer) return resolve();
+    currentServer.close(error => error ? reject(error) : resolve());
+  });
+  const closeHardware = new Promise((resolve, reject) => {
+    if (!transport || transport.isOpen === false || typeof transport.close !== 'function') return resolve();
+    transport.close(error => error ? reject(error) : resolve());
+  });
+  try { await Promise.all([closeHttp, closeHardware]); }
+  finally { board?.removeAllListeners(); board = sensor = relay = undefined; }
+}
 
-process.on("SIGINT", gracefulShutdown);
-process.on("SIGTERM", gracefulShutdown);
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  startServer();
+  const shutdown = () => stopServer().then(() => process.exit(0), () => process.exit(1));
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+}
 
 export { app };

@@ -194,8 +194,8 @@
     </div>
 
     <script>
-      const statusUrl = "http://localhost:3000/status";
-      const commandUrl = "http://localhost:3000/command";
+      const statusUrl = "/status";
+      const commandUrl = "/command";
       const pollInterval = 2000;
 
       const humidityGauge = document.getElementById("humidity-gauge");
@@ -216,12 +216,10 @@
         wrapper.className = `chat ${
           type === "user" ? "chat-end" : "chat-start"
         }`;
-        wrapper.innerHTML = `
-          <div class="chat-bubble ${
-            type === "user"
-              ? "chat-bubble-success"
-              : "chat-bubble-secondary"
-          } whitespace-pre-line">${text}</div>`;
+        const bubble = document.createElement('div');
+        bubble.className = `chat-bubble ${type === 'user' ? 'chat-bubble-success' : 'chat-bubble-secondary'} whitespace-pre-line`;
+        bubble.textContent = text;
+        wrapper.appendChild(bubble);
         chatLog.appendChild(wrapper);
         chatLog.scrollTop = chatLog.scrollHeight;
       };
@@ -257,19 +255,26 @@
         appendMessage("system", message);
       };
 
+      let polling = false;
+      let offline = false;
       const pollStatus = async () => {
+        if (polling) return;
+        polling = true;
         try {
           const res = await fetch(statusUrl);
           if (!res.ok) throw new Error("Status HTTP " + res.status);
           const data = await res.json();
           updateUI(data);
+          offline = false;
         } catch (error) {
           console.error("Error al obtener /status", error);
-          handleErrorState("Sistema Offline: " + error.message);
-        }
+          if (!offline) handleErrorState("Sistema Offline: " + error.message);
+          offline = true;
+        } finally { polling = false; }
       };
 
-      setInterval(pollStatus, pollInterval);
+      const pollTimer = setInterval(pollStatus, pollInterval);
+      window.addEventListener('pagehide', () => clearInterval(pollTimer), { once: true });
       pollStatus();
 
       const recognition = "webkitSpeechRecognition" in window
@@ -307,25 +312,20 @@
           await sendCommand(transcript);
         };
 
-        let pressTimeout;
-        micButton.addEventListener("mousedown", () => {
-          recognition.start();
-          pressTimeout = setTimeout(() => {}, 0);
-        });
-        micButton.addEventListener("mouseup", () => {
-          clearTimeout(pressTimeout);
-          recognition.stop();
-        });
-        micButton.addEventListener("mouseleave", () => {
-          if (recognition) recognition.stop();
-        });
-        micButton.addEventListener("touchstart", (e) => {
-          e.preventDefault();
-          recognition.start();
-        });
-        micButton.addEventListener("touchend", () => {
-          recognition.stop();
-        });
+        let listening = false;
+        const beginListening = () => {
+          if (listening) return;
+          try { recognition.start(); listening = true; } catch { listening = false; }
+        };
+        const endListening = () => { if (listening) recognition.stop(); };
+        const originalOnEnd = recognition.onend;
+        recognition.onend = () => { listening = false; originalOnEnd(); };
+        micButton.addEventListener('pointerdown', event => { event.preventDefault(); micButton.setPointerCapture(event.pointerId); beginListening(); });
+        micButton.addEventListener('pointerup', endListening);
+        micButton.addEventListener('pointercancel', endListening);
+        micButton.addEventListener('keydown', event => { if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) { event.preventDefault(); beginListening(); } });
+        micButton.addEventListener('keyup', event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); endListening(); } });
+        window.addEventListener('pagehide', () => recognition.abort(), {once: true});
       } else {
         micButton.disabled = true;
         micButton.classList.add("btn-disabled");
@@ -347,13 +347,15 @@
           const data = await res.json();
           appendMessage("assistant", data.response_text || "Sin respuesta");
           updateUI(data);
+          offline = false;
         } catch (error) {
           console.error("Error enviando comando", error);
           appendMessage(
             "system",
             "No pude comunicarme con el servidor: " + error.message
           );
-          handleErrorState("Sistema Offline: " + error.message);
+          if (!offline) handleErrorState("Sistema Offline: " + error.message);
+          offline = true;
         }
       };
     </script>

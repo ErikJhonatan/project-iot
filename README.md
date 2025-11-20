@@ -54,3 +54,7 @@ npm start
 - Relé de la bomba en `D7`.
 
 Asegúrate de cargar Firmata Standard en el Arduino con el IDE antes de iniciar el servidor en modo real.
+
+## Cambios de comportamiento
+
+Solo `public/` se sirve como contenido estático. Importar `server.js` no abre HTTP ni inicializa hardware; `startServer()` y `stopServer()` gestionan su ciclo de vida. La calibración exige valores finitos y `SENSOR_MAX > SENSOR_MIN`. Los comandos deben ser texto no vacío de hasta 1000 caracteres.
